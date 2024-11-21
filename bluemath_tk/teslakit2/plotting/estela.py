@@ -6,6 +6,9 @@ import os.path as op
 import copy
 from datetime import datetime, date
 
+from PIL import Image
+import cmocean 
+
 # pip
 import numpy as np
 import xarray as xr
@@ -17,6 +20,8 @@ from matplotlib import cm
 import cartopy
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
+
+
 
 # teslakit
 from ..util.operations import GetBestRowsCols
@@ -110,7 +115,7 @@ def axplot_EOF_evolution(ax, time, EOF_evol):
     ax.xaxis.set_major_locator(yloc1)
     ax.xaxis.set_major_formatter(yfmt)
     ax.grid(True, which='both', axis='x', linestyle='--', color='grey')
-    ax.tick_params(axis='both', which='major', labelsize=8)
+    ax.tick_params(axis='both', which='major', labelsize=4)
 
 # def axplot_DWT(ax, dwt, vmin, vmax, wt_num, land=None, wt_color=None):
 #     'axes plot EOFs 2d map'
@@ -155,7 +160,12 @@ def axplot_EOF_evolution(ax, time, EOF_evol):
 def axplot_DWT(ax,xds_var, dwt, vmin, vmax, wt_num, land=None, wt_color=None):
     'axes plot EOFs 2d map'
 
-    cmap = copy.deepcopy(cm.get_cmap('RdBu_r'))
+    var = xds_var.name
+
+    if var=='geo500hpa':
+        cmap = copy.deepcopy(cm.get_cmap('GnBu'))
+    else:
+        cmap = copy.deepcopy(cm.get_cmap('RdBu_r'))
 
     # EOF pcolormesh 
     # pc = ax.pcolormesh(
@@ -163,6 +173,7 @@ def axplot_DWT(ax,xds_var, dwt, vmin, vmax, wt_num, land=None, wt_color=None):
     #     cmap = cmap, shading = 'gouraud',
     #     clim = (vmin, vmax), transform = ccrs.PlateCarree()
     # )
+
 
     pc = ax.contourf(
         xds_var.longitude.values, xds_var.latitude.values, dwt, 100,
@@ -619,7 +630,6 @@ def Plot_DWTs_Mean_Anom(xds_KMA, xds_var, kind='mean', mask_land=None,
     # var_min = np.min(xds_var.values)
     
     
-    
     scale = 1/100.0  # scale from Pa to mbar
 
     # get number of rows and cols for gridplot 
@@ -637,16 +647,27 @@ def Plot_DWTs_Mean_Anom(xds_KMA, xds_var, kind='mean', mask_land=None,
     gs = gridspec.GridSpec(n_rows, n_cols, wspace=0.1, hspace=0.1)
     gr, gc = 0, 0
 
+    var = xds_var.name
+
+
     for ic in range(n_clusters):
 
         if kind=='mean':
-            
-            var_max = 1013+cbar_mean
-            var_min = 1013-cbar_mean
-            # data mean
-            it = np.where(bmus==ic)[0][:]
-            c_mean = xds_var.isel(time=it).mean(dim='time')
-            c_plot = np.multiply(c_mean, scale)  # apply scale
+
+            if var=='geo500hpa':
+                var_max = 57322+350
+                var_min = 57322-350
+                it = np.where(bmus==ic)[0][:]
+                c_mean = xds_var.isel(time=it).mean(dim='time')
+                c_plot = c_mean # np.multiply(c_mean, scale)  # apply scale
+
+            else:
+                var_max = 1013+cbar_mean
+                var_min = 1013-cbar_mean
+                # data mean
+                it = np.where(bmus==ic)[0][:]
+                c_mean = xds_var.isel(time=it).mean(dim='time')
+                c_plot = np.multiply(c_mean, scale)  # apply scale
 
         elif kind=='anom':
             
@@ -697,12 +718,377 @@ def Plot_DWTs_Mean_Anom(xds_KMA, xds_var, kind='mean', mask_land=None,
     cb = fig.colorbar(pc, cax=cbar_ax, orientation='horizontal')
     if kind=='mean':
         cb.set_label('Pressure (mbar)')
+        plt.savefig(f'results/DWT_{var}.png', dpi=300, bbox_inches='tight')
+
     elif kind=='anom':
         cb.set_label('Pressure anomalies (mbar)')
+        plt.savefig(f'results/DWT_anom_{var}.png', dpi=300, bbox_inches='tight')
 
     # show and return figure
     if show: plt.show()
     return fig
+
+
+
+
+
+
+
+
+def Plot_DWTs_Spatial_Maps(xds_KMA, xds_var,  waves, waves_period, rain, twl, kind='mean', mask_land=None,
+                        show=True, figsize=None, cbar_mean=20, cbar_anom=20):
+    '''
+    Plot Daily Weather Types (bmus mean) in a single vertical column.
+    kind - mean/anom
+    '''
+    import matplotlib.pyplot as plt
+    import matplotlib.gridspec as gridspec
+    import cartopy.crs as ccrs
+    import cartopy.feature as cfeature
+    import cmocean
+    import numpy as np
+    import copy
+
+    bmus = xds_KMA['sorted_bmus'].values[:]
+    n_clusters = len(xds_KMA.n_clusters.values[:])
+    scale = 1/100.0  # scale from Pa to mbar
+
+    # Set colors for each cluster
+    cs_dwt = colors_dwt(n_clusters)
+    
+
+    # Lista de variables a graficar
+    vars = ['bmus', 'swh', 'mwp', 'precipitation', 'waterlevel']  # Variables de interés
+    num_clusters = 36
+    c_clusters = plt.cm.viridis(np.linspace(0, 1, num_clusters))  # Colores para cada cluster
+
+    # Establecer límites de color para cada variable
+    color_limits = {
+        'swh': (0, 7),  # Ejemplo de rango en metros para 'swh'
+        'mwp': (0, 10),  # Ejemplo de rango en segundos para 'mwp'
+        'precipitation': (0, 5),  # Ejemplo de rango en mm para 'precipitation',
+        'waterlevel': (-20, 20)  # Ejemplo de rango en cm para 'waterlevel',
+
+    }
+
+    # Crear la figura y los subplots
+    fig = plt.figure(figsize=(2.5 * len(vars), 2 * num_clusters))  # Ajusta el tamaño según el número de variables y clusters
+    gs = gridspec.GridSpec(num_clusters, len(vars), hspace=0.3, wspace=0.6)  # Filas para clusters, columnas para variables
+
+    # Iterar sobre cada cluster y variable
+    for i_cluster in range(num_clusters):
+        for j_var, var in enumerate(vars):
+            ax = fig.add_subplot(gs[i_cluster, j_var], projection=ccrs.PlateCarree())  # Proyección cartográfica genérica
+
+            if var == 'bmus':
+                # Determine data to plot based on `kind`
+                if kind == 'mean':
+                    var_max = 1013 + cbar_mean
+                    var_min = 1013 - cbar_mean
+                    # Data mean
+                    it = np.where(bmus == i_cluster)[0][:]
+                    c_mean = xds_var.isel(time=it).mean(dim='time')
+                    c_plot = np.multiply(c_mean, scale)  # Apply scale
+
+                elif kind == 'anom':
+                    var_max = cbar_anom
+                    var_min = -cbar_anom
+                    # Data anomaly
+                    it = np.where(bmus == i_cluster)[0][:]
+                    t_mean = xds_var.mean(dim='time')
+                    c_mean = xds_var.isel(time=it).mean(dim='time')
+                    c_anom = c_mean - t_mean
+                    c_plot = np.multiply(c_anom, scale)  # Apply scale
+
+                # DWT color
+                clr = cs_dwt[i_cluster]
+
+                # Axes plot
+                ax = plt.subplot(gs[i_cluster, 0], projection=ccrs.PlateCarree())
+                ax.coastlines(resolution='50m', color='black')
+
+                # Plot data
+                pc = axplot_DWT(
+                    ax, xds_var, c_plot,
+                    vmin=var_min, vmax=var_max,
+                    wt_num=i_cluster + 1,
+                    land=mask_land, wt_color=clr,
+                )
+
+                # Set color limits for anomalies
+                if kind == 'anom':
+                    pc.set_clim(-cbar_anom, cbar_anom)
+
+                # Add title for each subplot
+                ax.set_title(f'Cluster {i_cluster + 1}', color=clr, fontsize=10)
+                
+                if i_cluster == num_clusters - 1:
+                    # Add a colorbar below the plots
+
+
+                    ticks_values = [1000, 1005, 1010]
+                    
+                    cbar_ax = fig.add_axes([
+                        ax.get_position().x0 + 0.01,  # Desplaza un poco hacia la derecha
+                        ax.get_position().y0 - 0.01,  # Posición vertical justo debajo del gráfico
+                        ax.get_position().width * 0.8,  # Ancho un poco más estrecho que el gráfico
+                        0.001  # Altura más pequeña para hacer el colorbar más delgado
+                    ])
+                    cb = fig.colorbar(pc, cax=cbar_ax, orientation='horizontal', ticks=ticks_values)
+
+                    if kind == 'mean':
+                        cb.set_label('Pressure (mbar)')
+                    elif kind == 'anom':
+                        cb.set_label('Pressure anomalies (mbar)')
+
+                    cbar_ax.tick_params(labelsize=6)  # Cambia el tamaño de los números en el colorbar
+                
+
+
+
+            else:
+            
+                # Seleccionar el dataset y colormap correspondiente a la variable actual
+                if var == 'swh':
+                    ds = waves
+                    c_cmap = 'rainbow'
+                elif var == 'mwp':
+                    ds = waves_period
+                    c_cmap = 'viridis'
+                elif var == 'precipitation':
+                    ds = rain
+                    c_cmap = cmocean.cm.rain
+                elif var == 'waterlevel':
+                    ds = twl
+                    c_cmap = 'rainbow'
+
+                
+                if var == 'waterlevel':
+
+                    #ax = fig.add_subplot(gs[i_cluster, 0], projection=ccrs.PlateCarree())
+                        
+                    # Seleccionar las estaciones que pertenecen al clúster i_cluster
+                    times_clusters = twl.cluster == i_cluster  # Filtrar el clúster en base a la variable `cluster`
+                    
+                    # Obtener las longitudes y latitudes de las estaciones
+                    cluster_lon = twl.station_x_coordinate.values  # Longitudes de las estaciones
+                    cluster_lat = twl.station_y_coordinate.values  # Latitudes de las estaciones
+                    
+                    # Crear listas vacías para almacenar las coordenadas y los valores de waterlevel
+                    all_lon = []
+                    all_lat = []
+                    all_mean_waterlevels = []
+                        
+                    # Para cada estación
+                    for i_station in range(len(twl.stations.values)):
+                        
+                        # Calcular la media de waterlevel para la estación i_station a lo largo del tiempo
+                        mean_waterlevel = np.nanmean(twl.waterlevel.values[times_clusters, i_station])  # Promedio sobre 'time'
+                        
+                        # Almacenar las coordenadas y el valor de mean_waterlevel
+                        all_lon.append(cluster_lon[i_station])
+                        all_lat.append(cluster_lat[i_station])
+                        all_mean_waterlevels.append(mean_waterlevel)
+                    
+                    # Convertir las listas en arrays para graficar más fácilmente
+                    all_lon = np.array(all_lon)
+                    all_lat = np.array(all_lat)
+                    all_mean_waterlevels = np.array(all_mean_waterlevels)
+                    
+                    # Graficar todas las estaciones a la vez
+                    sc = ax.scatter(all_lon, all_lat, c=all_mean_waterlevels, cmap=c_cmap, 
+                                    s=2, zorder=3, vmin=-20, vmax=20)
+                    
+                    # Añadir características geográficas
+                    ax.add_feature(cfeature.LAND, zorder=2, facecolor='lightgrey')  
+                    ax.coastlines() 
+
+                    # Configurar título y etiquetas
+                    ax.set_title(f'Cluster {i_cluster + 1} - {var}', fontsize=10)
+
+                    # Añadir colorbar horizontal debajo de cada columna solo en la última fila
+                    if i_cluster == num_clusters - 1:
+                        # Configurar la posición del colorbar debajo del gráfico
+                        cbar_ax = fig.add_axes([
+                            ax.get_position().x0 + 0.01,  # Desplaza un poco hacia la derecha
+                            ax.get_position().y0 - 0.01,  # Posición vertical justo debajo del gráfico
+                            ax.get_position().width * 0.8,  # Ancho un poco más estrecho que el gráfico
+                            0.001  # Altura más pequeña para hacer el colorbar más delgado
+                        ])
+                        fig.colorbar(sc, cax=cbar_ax, orientation='horizontal', label=f'{var} mean values')
+
+
+                else:
+
+                    # Seleccionar los datos de la variable `var` donde el cluster es igual al valor actual
+                    mean_cluster = ds[var].where(ds['cluster'] == i_cluster, drop=True).mean(dim='time')
+                    
+                    # Graficar el campo espacial medio para el cluster actual y variable actual, con escala fija
+                    vmin, vmax = color_limits[var]  # Usar el rango predefinido para cada variable
+                    im = mean_cluster.plot(ax=ax, cmap=c_cmap, vmin=vmin, vmax=vmax, add_colorbar=False, zorder=1)
+
+                    # Añadir contornos de tierra y costas
+                    ax.add_feature(cfeature.LAND, zorder=0, facecolor='lightgrey')
+                    ax.coastlines(zorder=2)
+                    
+                    # Configurar título y etiquetas
+                    ax.set_title(f'Cluster {i_cluster + 1} - {var}', fontsize=10)
+                    
+                    # Añadir colorbar horizontal debajo de cada columna solo en la última fila
+                    if i_cluster == num_clusters - 1:
+                        # Configurar la posición del colorbar debajo del gráfico
+                        cbar_ax = fig.add_axes([
+                            ax.get_position().x0 + 0.01,  # Desplaza un poco hacia la derecha
+                            ax.get_position().y0 - 0.01,  # Posición vertical justo debajo del gráfico
+                            ax.get_position().width * 0.8,  # Ancho un poco más estrecho que el gráfico
+                            0.001  # Altura más pequeña para hacer el colorbar más delgado
+                        ])
+                        fig.colorbar(im, cax=cbar_ax, orientation='horizontal', label=f'{var} mean values')
+
+
+    # Mostrar el gráfico
+    plt.tight_layout(rect=[0, 0.1, 0.9, 1])  # Ajusta los márgenes para los colorbars individuales
+    plt.plot()
+
+
+
+
+
+def generate_predictand_plot(var, waves, waves_period, rain, twl):
+
+    if var == 'waterlevel':
+
+        num_clusters = len(np.unique(twl.cluster))  # Número de clústeres
+
+        # Crear el colormap para los clústeres
+        c_clusters = plt.cm.viridis(np.linspace(0, 1, num_clusters))
+
+        fig = plt.figure(figsize=(15, 12))
+        gs = gridspec.GridSpec(6, 6)  # Crear una grilla de subgráficos
+
+        # Para cada clúster
+        for i_cluster in range(num_clusters):
+            ax = fig.add_subplot(gs[i_cluster], projection=ccrs.PlateCarree())
+            
+            # Seleccionar las estaciones que pertenecen al clúster i_cluster
+            times_clusters = twl.cluster == i_cluster  # Filtrar el clúster en base a la variable `cluster`
+            
+            # Obtener las longitudes y latitudes de las estaciones
+            cluster_lon = twl.station_x_coordinate.values  # Longitudes de las estaciones
+            cluster_lat = twl.station_y_coordinate.values  # Latitudes de las estaciones
+            
+            # Crear listas vacías para almacenar las coordenadas y los valores de waterlevel
+            all_lon = []
+            all_lat = []
+            all_mean_waterlevels = []
+                
+            # Para cada estación
+            for i_station in range(len(twl.stations.values)):
+                
+                # Calcular la media de waterlevel para la estación i_station a lo largo del tiempo
+                mean_waterlevel = np.nanmean(twl.waterlevel.values[times_clusters, i_station])  # Promedio sobre 'time'
+                
+                # Almacenar las coordenadas y el valor de mean_waterlevel
+                all_lon.append(cluster_lon[i_station])
+                all_lat.append(cluster_lat[i_station])
+                all_mean_waterlevels.append(mean_waterlevel)
+            
+            # Convertir las listas en arrays para graficar más fácilmente
+            all_lon = np.array(all_lon)
+            all_lat = np.array(all_lat)
+            all_mean_waterlevels = np.array(all_mean_waterlevels)
+            
+            # Graficar todas las estaciones a la vez
+            sc = ax.scatter(all_lon, all_lat, c=all_mean_waterlevels, cmap='rainbow', 
+                            s=2, zorder=3, vmin=-20, vmax=20)
+            
+            # Añadir características geográficas
+            ax.add_feature(cfeature.LAND, zorder=2, facecolor='lightgrey')  
+            ax.coastlines()  
+            
+            
+            cbar_ax = fig.add_axes([0.1, 0.05, 0.8, 0.02])
+
+            fig.colorbar(sc, cax=cbar_ax, orientation='horizontal', label='Mean water level (cm)')
+
+
+        # Ajustar los subgráficos y mostrar
+        plt.subplots_adjust(hspace=0.1, bottom=0.1, left=0.1, right=0.9)  
+        plt.savefig(f'results/DWT_{var}.png', dpi=300, bbox_inches='tight')
+        plt.close(fig) 
+
+
+
+    else:
+
+        num_clusters = len(np.unique(waves.cluster))
+        c_clusters = plt.cm.viridis(np.linspace(0, 1, num_clusters)) 
+
+        fig = plt.figure(figsize=(15, 12))
+        gs = gridspec.GridSpec(6, 6)  
+
+        for i_cluster in range(num_clusters):
+            ax = fig.add_subplot(gs[i_cluster], projection=ccrs.PlateCarree())  
+
+            # colormap selection
+            if var == 'swh':
+                ds = waves[var].where(waves['cluster'] == i_cluster, drop=True).mean(dim='time')
+                c_cmap = 'rainbow'
+            elif var == 'mwp':
+                c_cmap = 'viridis'
+                ds = waves_period[var].where(waves_period['cluster'] == i_cluster, drop=True).mean(dim='time')
+            elif var == 'precipitation':
+                c_cmap = cmocean.cm.rain
+                ds = rain[var].where(rain['cluster'] == i_cluster, drop=True).mean(dim='time')
+
+            im = ds.plot(ax=ax, cmap=c_cmap, add_colorbar=False)
+            
+            ax.add_feature(cfeature.LAND, zorder=2, facecolor='lightgrey')  
+            ax.coastlines()
+            
+            ax.set_title('')  
+            
+
+        plt.subplots_adjust(hspace=0.1, bottom=0.1, left=0.1, right=0.9)  
+
+        cbar_ax = fig.add_axes([0.1, 0.05, 0.8, 0.02])
+
+        if var == 'swh':
+            fig.colorbar(im, cax=cbar_ax, orientation='horizontal', label='Mean Significant Wave Height (m)')
+        elif var == 'mwp':
+            fig.colorbar(im, cax=cbar_ax, orientation='horizontal', label='Mean Wave Period (s)')
+        elif var == 'precipitation':
+            fig.colorbar(im, cax=cbar_ax, orientation='horizontal', label='Precipitation (mm/h)')
+
+
+
+        plt.savefig(f'results/DWT_{var}.png', dpi=300, bbox_inches='tight')
+        plt.close(fig) 
+
+
+
+
+def plot_DWT_predictand(var1,var2):
+
+    path = 'Results/'
+    img1 = Image.open("/home/ortizaj/Desktop/UCSC/HONG_KONG_COURSE/results/DWT_"f"{var1}.png")
+    img2 = Image.open("/home/ortizaj/Desktop/UCSC/HONG_KONG_COURSE/results/DWT_"f"{var2}.png")
+
+    img1 = img1.resize((800, 600))  
+    img2 = img2.resize((800, 600))  
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(30, 12))  
+
+    ax1.imshow(img1)
+    ax1.axis('off')  
+
+    ax2.imshow(img2)
+    ax2.axis('off')
+
+    plt.show()
+
+
+
 
 
 def ClusterProbs_Month(bmus, time, wt_set, month_ix):
@@ -814,4 +1200,109 @@ def Plot_DWTs_Probs(bmus, bmus_time, n_clusters, show=True):
     # show and return figure
     if show: plt.show()
     return fig
+
+def Plot_EOFs_EstelaPred_geo(xds_PCA, n_plot, mask_land=None, show=True, figsize = None):
+    '''
+    Plot annual EOFs for 3D predictors
+
+    xds_PCA:
+        (n_components, n_components) PCs
+        (n_components, n_features) EOFs
+        (n_components, ) variance
+
+        (n_lon, ) pred_lon: predictor longitude values
+        (n_lat, ) pred_lat: predictor latitude values
+        (n_time, ) pred_time: predictor time values
+
+        method: gradient + estela
+
+    n_plot: number of EOFs plotted
+    '''
+
+    #&nbsp;TODO: fix data_pos, fails only after pred.Load()?
+
+    # PCA data
+    variance = xds_PCA['variance'].values[:]
+    EOFs = np.transpose(xds_PCA['EOFs'].values[:])
+    PCs = np.transpose(xds_PCA['PCs'].values[:])
+    data_pos = xds_PCA['pred_data_pos'].values[:]  # for handling nans
+    pca_time = xds_PCA['pred_time'].values[:]
+    pred_name = xds_PCA.attrs['pred_name']
+
+    # PCA lat lon metadata
+    lon = xds_PCA['pred_lon'].values
+    lat = xds_PCA['pred_lat'].values
+
+    # percentage of variance each field explains
+    n_percent = variance / np.sum(variance)
+
+    l_figs = []
+    for it in range(n_plot):
+
+        # get vargrd 
+        var_grd_1d = EOFs[:,it] * np.sqrt(variance[it])
+
+        # insert nans in data
+        base = np.nan * np.ones(data_pos.shape)
+        base[data_pos] = var_grd_1d
+
+        var = base[:int(len(base)/3)]
+        grd = base[int(len(base)/3):int(len(base)*2/3)]
+        geo = base[int(len(base)*2/3):]
+
+
+        # reshape data to grid
+        C1 = np.reshape(var, (len(lon), len(lat)))
+        C2 = np.reshape(grd, (len(lon), len(lat)))
+        C3 = np.reshape(geo, (len(lon), len(lat)))
+
+
+        # figure
+        if figsize:
+            fig = plt.figure(figsize=figsize)
+        else:
+            fig = plt.figure(figsize=(_faspect*_fsize, 2.0/3.0*_fsize))
+
+        # layout
+        gs = gridspec.GridSpec(4, 6, wspace=0.10, hspace=0.2)
+
+        ax_EOF_1 = plt.subplot(gs[:3, :2], projection=ccrs.PlateCarree())
+        ax_EOF_1.add_feature(cfeature.LAND, color = 'lightgrey',edgecolor = 'lightgrey')
+        ax_EOF_1.coastlines(resolution='50m', color='black')  # Draw only the coastline
+
+
+        ax_EOF_2 = plt.subplot(gs[:3, 2:4], projection=ccrs.PlateCarree())
+        ax_EOF_2.add_feature(cfeature.LAND, color = 'lightgrey',edgecolor = 'lightgrey')
+        ax_EOF_2.coastlines(resolution='50m', color='black')  # Draw only the coastline
+
+
+        ax_EOF_3 = plt.subplot(gs[:3, 4:6], projection=ccrs.PlateCarree())
+        ax_EOF_3.add_feature(cfeature.LAND, color = 'lightgrey',edgecolor = 'lightgrey')
+        ax_EOF_3.coastlines(resolution='50m', color='black')  # Draw only the coastline
+
+        
+        ax_evol = plt.subplot(gs[3, :])
+
+        # EOF pcolormesh (SLP and GRADIENT)
+        axplot_EOF(ax_EOF_1, C1, lon, lat, ttl = pred_name, land=mask_land)
+        axplot_EOF(ax_EOF_2, C2, lon, lat, ttl = 'gradient', land=mask_land)
+        axplot_EOF(ax_EOF_3, C3, lon, lat, ttl = 'Geopotential 500 HPa', land=mask_land)
+
+
+        # time series EOF evolution
+        evol =  PCs[it,:]/np.sqrt(variance[it])
+        axplot_EOF_evolution(ax_evol, pca_time, evol)
+
+        # figure title
+        ttl = 'EOF #{0}  ---  {1:.2f}%'.format(it+1, n_percent[it]*100)
+        fig.suptitle(ttl, fontsize=8, fontweight='bold')
+
+        l_figs.append(fig)
+
+    # show and return figure
+    if show: plt.show()
+    return l_figs
+
+
+
 

@@ -8,10 +8,14 @@ from datetime import datetime
 
 # pip
 import numpy as np
+import xarray as xr
+import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import matplotlib.dates as mdates
 
+import matplotlib.pyplot as plt
+from PIL import Image
 
 # teslakit
 from ..util.operations import GetBestRowsCols
@@ -26,26 +30,35 @@ from .config import _faspect, _fsize
 def axplot_AWT_2D(ax, var_2D, num_wts, id_wt, color_wt):
     'axes plot AWT variable (2D)'
 
-    # plot 2D AWT
+    # Plot 2D AWT
     ax.pcolormesh(
         var_2D,
         cmap='RdBu_r', shading='gouraud',
         vmin=-1.5, vmax=+1.5,
     )
 
-    # title and axis labels/ticks
+    # Title and axis labels/ticks
     ax.set_title(
         'WT #{0} --- {1} years'.format(id_wt, num_wts),
-        {'fontsize': 14, 'fontweight':'bold'}
+        {'fontsize': 14, 'fontweight': 'bold'}
     )
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_ylabel('month', {'fontsize':8})
-    ax.set_xlabel('lon', {'fontsize':8})
 
-    # set WT color on axis frame
+    # Set the y-ticks to represent the months you want (e.g., March, December, September, June)
+    ax.set_yticks([0, 3, 6, 9])  # Ticks at Mar (2), Jun (5), Sept (8), Dec (11)
+
+    # Assign labels to those ticks
+    ax.set_yticklabels(['Jun', 'Sept', 'Dec','Mar'], fontsize=8)
+
+    # Set x-ticks (you can customize this as needed)
+    ax.set_xticks([])  # Remove x-axis ticks if not needed, or customize as per your data
+
+    # Set axis labels
+    ax.set_xlabel('Lon', fontsize=8)
+
+    # Set WT color on axis frame
     plt.setp(ax.spines.values(), color=color_wt, linewidth=4)
     plt.setp([ax.get_xticklines(), ax.get_yticklines()], color=color_wt)
+
 
 def axplot_AWT_years(ax, dates_wt, bmus_wt, color_wt, xticks_clean=False,
                      ylab=None, xlims=None):
@@ -267,6 +280,172 @@ def Plot_AWTs(bmus, Km, n_clusters, lon, show=True):
     if show: plt.show()
     return fig
 
+def Calculate_AWTs_DWTs(SLP_KMA, SST_AWTs):
+    '''
+        Historical probability of occurrence for DWTs within each AWT
+    '''
+
+    awts = SST_AWTs.bmus.values
+    years_awts = SST_AWTs.time.values
+    
+    ds_awts = xr.Dataset(
+        {
+            'awt': ('time', awts)  # La variable `awt` usando `time` como dimensión
+        },
+        coords={
+            'time': pd.to_datetime(years_awts, format='%Y')  # Convertir `time` a tipo datetime
+        }
+    )
+
+    last_year = ds_awts['time'].dt.year.max().item()
+
+    first_year = SLP_KMA['time'].dt.year.min().item()
+
+    time_index = ds_awts['time'].to_index()
+
+    pos = time_index.get_loc(f"{first_year}-06-01")
+
+    ds_awts = ds_awts.isel(time=slice(pos, None))
+
+    end_time_str = f'{last_year}-12-31 00:00:00'
+    end_time_date = pd.to_datetime(end_time_str)
+
+    ds_recortado = SLP_KMA.sel(time=slice(None, end_time_date))
+
+    # Asegúrate de que 'time' está en formato datetime64 (si no lo está, conviértelo)
+    ds_recortado['time'] = pd.to_datetime(ds_recortado['time'].values)
+
+    # Extraer el año de cada fecha en ds_recortado
+    years_recortado = ds_recortado['time'].dt.year
+
+    awt_values = ds_awts.awt.values
+
+    df_year = ds_awts.to_dataframe()
+
+    df_year = pd.DataFrame(data=awt_values, columns=['awt'], index=np.arange(1940, 2021))
+
+    daily_times = years_recortado.time.values
+
+    # crear un xr dataset con una variable en diario
+    ds = xr.Dataset(
+        {'clusters': (('time'), ds_recortado.cluster.values)},
+        
+        coords={'time': daily_times}
+    )
+
+    df_var = ds.to_dataframe()
+    df_var['year'] = df_var.index.year
+    df_var = df_var.reset_index().set_index('year')
+
+    df_result = pd.merge(df_var, df_year, left_index=True, right_index=True)
+    ds_awts_plot = df_result.to_xarray()
+
+    
+
+    num_clusters = len(np.unique(ds_awts_plot['clusters'].values))  # Number of clusters
+    unique_awts = np.unique(ds_awts_plot['awt'].values)  # Number of AWT
+    num_awts = len(unique_awts)
+
+    fig = plt.figure(figsize=(20, 3))
+    gs = gridspec.GridSpec(1, num_awts, wspace=0.3)  
+
+    for i, awt_value in enumerate(unique_awts):
+        ax = fig.add_subplot(gs[0, i])
+        
+        awt_clusters = ds_awts_plot['clusters'].where(ds_awts_plot['awt'] == awt_value, drop=True)
+        
+        cluster_probabilities = np.zeros(num_clusters)
+
+        for cluster_id in range(num_clusters):
+            cluster_count = (awt_clusters == cluster_id).sum().item()  
+            total_count = len(awt_clusters)  
+            cluster_probabilities[cluster_id] = (cluster_count / total_count) * 100 if total_count > 0 else 0  # Transform to %
+
+        probabilities_grid = cluster_probabilities.reshape(int(num_clusters** 0.5), int(num_clusters** 0.5))
+
+        
+        im = ax.imshow(probabilities_grid, cmap='Reds', aspect='auto', vmin=0, vmax=15)
+        ax.set_title(f'AWT: {awt_value+1}')
+        ax.axis('off')  
+
+    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])  
+    cbar = fig.colorbar(im, cax=cbar_ax, orientation='vertical', label='Cluster Probability (%)')
+    cbar.set_ticks([0, 5, 10, 15])  
+
+    plt.savefig('DWT_probabilities_AWT.png', dpi=300, bbox_inches='tight')
+
+    plt.close(fig)
+
+
+
+def Create_Plot_AWTs(bmus, Km, n_clusters, lon, show=False):
+    '''
+    Plot Annual Weather Types in a single row.
+
+    bmus, Km, n_clusters, lon - from KMA_simple()
+    '''
+
+    # Set single row and multiple columns
+    n_cols, n_rows = n_clusters, 1
+
+    # Get cluster colors
+    cs_awt = colors_awt()
+
+    # Define figure size and grid layout
+    fig = plt.figure(figsize=(20, 3))  # Adjust width based on clusters
+
+    gs = gridspec.GridSpec(n_rows, n_cols, wspace=0.3, hspace=0.15)
+
+    # Loop through clusters and plot each in a single row
+    for ic in range(n_clusters):
+        id_AWT = ic + 1           # Cluster ID
+        index = np.where(bmus == ic)[0][:]
+        var_AWT = Km[ic, :]
+        var_AWT_2D = var_AWT.reshape(-1, len(lon))
+        num_WTs = len(index)
+        clr = cs_awt[ic]          # Cluster color
+
+        # Plot AWT var 2D 
+        ax = plt.subplot(gs[0, ic])  # Use the single row
+        axplot_AWT_2D(ax, var_AWT_2D, num_WTs, id_AWT, clr)
+
+    plt.savefig('AWT.png', dpi=300, bbox_inches='tight')
+
+    # Only show the plot if show=True
+    if show:
+        plt.show()
+
+
+
+def Plot_AWTs_DWTs():
+    # Cargar imágenes
+    img1 = Image.open("AWT.png")
+    img2 = Image.open("DWT_probabilities_AWT.png")
+
+    # Obtener el tamaño de las imágenes
+    img1_width, img1_height = img1.size
+    img2_width, img2_height = img2.size
+
+    # Crear la figura con el tamaño adecuado para las dos imágenes
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(img1_width / 100, (img1_height + img2_height) / 100))  # Ajustar tamaño de la figura
+
+    # Mostrar las imágenes sin redimensionarlas
+    ax1.imshow(img1)
+    ax1.axis('off')  # Ocultar los ejes
+
+    ax2.imshow(img2)
+    ax2.axis('off')  # Ocultar los ejes
+
+    # Ajustar el espaciado entre los subgráficos
+    plt.subplots_adjust(hspace=0.1)  # Ajustar el espacio entre los subgráficos
+
+    # Mostrar el gráfico
+    plt.show()
+
+
+
+
+
 def Plot_AWTs_Dates(bmus, dates, n_clusters, show=True):
     '''
     Plot Annual Weather Types dates
@@ -305,6 +484,7 @@ def Plot_AWTs_Dates(bmus, dates, n_clusters, show=True):
     # show and return figure
     if show: plt.show()
     return fig
+
 
 def Plot_AWTs_EOFs(PCs, EOFs, variance, time, lon, n_plot, show=True):
     '''

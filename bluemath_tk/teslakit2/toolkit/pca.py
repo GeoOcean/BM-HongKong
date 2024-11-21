@@ -230,3 +230,82 @@ def PCA_EstelaPred_sst(xds, pred_name):
             'pred_name': pred_name,
         }
     )
+
+def PCA_EstelaPred_slp_grd_geo(xds, pred_name, pred_name_2):
+    '''
+    Principal component analysis
+    method: custom for estela predictor
+
+    xds:
+        (time, latitude, longitude), pred_name_comp | pred_name_gradient_comp
+
+    returns a xarray.Dataset containing PCA data: PCs, EOFs, variance
+    '''
+
+    # slp , slp gradient and precipitation predictors
+    pred_est_var = xds['{0}_comp'.format(pred_name)]
+    pred_est_grad = xds['{0}_gradient_comp'.format(pred_name)]
+    pred_est_precip = xds['{0}'.format(pred_name_2)]
+
+
+    # use data inside timeframe
+    dp_var = pred_est_var.values
+    dp_grd = pred_est_grad.values
+    dp_precip = pred_est_precip.values
+
+    shape_grid = dp_var[0].shape  # needed to handle data after PCs
+
+    # Nan Matrix: unravel and join var, grad & precipitation data
+    dp_ur = np.nan * np.ones(
+        (dp_var.shape[0], 3*dp_var.shape[1]*dp_var.shape[2])
+    )
+
+    # we use .T to equal matlab for var and grd predictors
+    for ti in range(dp_ur.shape[0]):
+        dp_ur[ti,:] = np.concatenate(
+            [np.ravel(dp_var[ti].T) , np.ravel(dp_grd[ti].T), np.ravel(dp_precip[ti].T)]
+        )
+
+
+    # remove nans from slp predictors    
+    data_pos = ~np.isnan(dp_ur[0,:])
+    clean_row = dp_ur[0, data_pos]
+    dp_ur_nonan = np.nan * np.ones(
+        (dp_ur.shape[0], len(clean_row))
+    )
+    for ti in range(dp_ur.shape[0]):
+        dp_ur_nonan[ti,:] = dp_ur[ti, data_pos]
+
+
+    # standarize predictor
+    pred_mean = np.mean(dp_ur_nonan, axis=0)
+    pred_std = np.std(dp_ur_nonan, axis=0)
+    pred_norm = (dp_ur_nonan[:,:] - pred_mean) / pred_std
+    pred_norm[np.isnan(pred_norm)] = 0
+
+
+    # principal components analysis
+    ipca = PCA(n_components=min(pred_norm.shape[0], pred_norm.shape[1]))
+    PCs = ipca.fit_transform(pred_norm)
+
+    # return dataset
+    return xr.Dataset(
+        {
+            'PCs': (('time', 'n_components'), PCs),
+            'EOFs': (('n_components','n_features'), ipca.components_),
+            'variance': (('n_components',), ipca.explained_variance_),
+
+            'pred_mean': (('n_features',), pred_mean),
+            'pred_std': (('n_features',), pred_std),
+
+            'pred_lon': (('n_lon',), xds.longitude.values[:]),
+            'pred_lat': (('n_lat',), xds.latitude.values[:]),
+            'pred_time': (('time',), xds.time.values[:]),
+            'pred_data_pos':(('n_points',), data_pos)
+        },
+
+        attrs = {
+            'method': 'gradient + geo',
+            'pred_name': pred_name,
+        }
+    )
