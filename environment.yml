@@ -45,6 +45,7 @@ dependencies:
       - affine==2.4.0
       - asttokens==2.4.1
       - attrs==24.2.0
+      - branca==0.8.0
       - cartopy==0.24.1
       - certifi==2024.8.30
       - cftime==1.6.4.post1
@@ -60,6 +61,7 @@ dependencies:
       - decorator==5.1.1
       - exceptiongroup==1.2.2
       - executing==2.1.0
+      - folium==0.18.0
       - fonttools==4.54.1
       - fsspec==2024.10.0
       - geopandas==1.0.1
@@ -69,11 +71,13 @@ dependencies:
       - importlib-metadata==8.5.0
       - ipython==8.28.0
       - jedi==0.19.1
+      - jinja2==3.1.4
       - joblib==1.4.2
       - jupyter-client==8.6.3
       - jupyter-core==5.7.2
       - kiwisolver==1.4.7
       - locket==1.0.0
+      - markupsafe==3.0.2
       - matplotlib==3.9.2
       - matplotlib-inline==0.1.7
       - nest-asyncio==1.6.0
@@ -124,5 +128,6 @@ dependencies:
       - wcwidth==0.2.13
       - wheel==0.44.0
       - xarray==2024.9.0
+      - xyzservices==2024.9.0
       - zipp==3.20.2
 prefix: /home/ortizaj/anaconda3/envs/TESLA_COURSE
