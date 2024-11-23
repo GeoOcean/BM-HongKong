@@ -1068,11 +1068,10 @@ def generate_predictand_plot(var, waves, waves_period, rain, twl):
 
 
 
-def plot_DWT_predictand(var1,var2):
+def plot_DWT_predictand(p_out, var1,var2):
 
-    path = 'Results/'
-    img1 = Image.open("/home/ortizaj/Desktop/UCSC/HONG_KONG_COURSE/results/DWT_"f"{var1}.png")
-    img2 = Image.open("/home/ortizaj/Desktop/UCSC/HONG_KONG_COURSE/results/DWT_"f"{var2}.png")
+    img1 = Image.open(op.join(p_out,'DWT_'f'{var1}.png'))
+    img2 = Image.open(op.join(p_out,'DWT_'f'{var2}.png'))
 
     img1 = img1.resize((800, 600))  
     img2 = img2.resize((800, 600))  

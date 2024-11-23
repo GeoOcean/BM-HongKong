@@ -438,9 +438,10 @@ def Plot_AWTs_DWTs():
 
     # Ajustar el espaciado entre los subgráficos
     plt.subplots_adjust(hspace=0.1)  # Ajustar el espacio entre los subgráficos
+    plt.close()
 
     # Mostrar el gráfico
-    plt.show()
+    #plt.show()
 
 
 
