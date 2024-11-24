@@ -171,7 +171,7 @@ def Copula_Hs_Tp_Dir_ss(main_path,ds,num_clusters,kernels,names,num_sim_rnd):
 
         # Limitador fisico
         copula = CopulaSimulation(variables, kernels, 3*num_sim_rnd)
-        var_max = 2.5*np.nanmax(variables, axis=0)
+        var_max = 3.5*np.nanmax(variables, axis=0)
         pos_copula = np.where((copula[:,0]<var_max[0]) & (copula[:,0]>=0) & (copula[:,1]<var_max[1]) & (copula[:,2]<var_max[2]) & (copula[:,3]<var_max[3]))[0]
 
 
