@@ -179,40 +179,40 @@ def Copula_Hs_Tp_Dir_ss(main_path,ds,num_clusters,kernels,names,num_sim_rnd):
         copula = copula[pos_copula[:num_sim_rnd],:]
 
 
-        fig = plt.figure(figsize=[19,5])
-        gs2=gridspec.GridSpec(1,4)
-        for nn in range(np.shape(variables)[1]):
-            ax2=fig.add_subplot(gs2[nn])
-            ax2.hist(variables[:,nn],density=True,label='Data',color='royalblue',alpha=0.7)
-            ax2.hist(copula[:,nn],density=True,label='Copula',color='orchid',alpha=0.5)
-            ax2.set_title(names[nn],fontsize=13)
-            ax2.legend()    
+        # fig = plt.figure(figsize=[19,5])
+        # gs2=gridspec.GridSpec(1,4)
+        # for nn in range(np.shape(variables)[1]):
+        #     ax2=fig.add_subplot(gs2[nn])
+        #     ax2.hist(variables[:,nn],density=True,label='Data',color='royalblue',alpha=0.7)
+        #     ax2.hist(copula[:,nn],density=True,label='Copula',color='orchid',alpha=0.5)
+        #     ax2.set_title(names[nn],fontsize=13)
+        #     ax2.legend()    
 
         
         
-        path_save=os.path.join(main_path,'Figures')
-        if not os.path.exists(path_save):
-            os.mkdir(path_save)
+        # path_save=os.path.join(main_path,'Figures')
+        # if not os.path.exists(path_save):
+        #     os.mkdir(path_save)
 
-        fig.savefig(os.path.join(main_path,'Figures','copula'+str(aa)+'.png'),dpi=500)
-        plt.close()
+        # fig.savefig(os.path.join(main_path,'Figures','copula'+str(aa)+'.png'),dpi=500)
+        # plt.close()
 
 
-        fig, axs = plt.subplots(1, 3, figsize = [15, 5])
-        axs[0].scatter(variables[:,0], variables[:,1])
-        axs[0].set_xlabel('Hs')
-        axs[0].set_xlabel('Tp')
+        # fig, axs = plt.subplots(1, 3, figsize = [15, 5])
+        # axs[0].scatter(variables[:,0], variables[:,1])
+        # axs[0].set_xlabel('Hs')
+        # axs[0].set_xlabel('Tp')
 
-        axs[1].scatter(variables[:,0], variables[:,3])
-        axs[1].set_xlabel('Hs')
-        axs[1].set_xlabel('ss')
+        # axs[1].scatter(variables[:,0], variables[:,3])
+        # axs[1].set_xlabel('Hs')
+        # axs[1].set_xlabel('ss')
 
-        axs[2].scatter(variables[:,2], variables[:,3])
-        axs[2].set_xlabel('Tp')
-        axs[2].set_xlabel('ss')
+        # axs[2].scatter(variables[:,2], variables[:,3])
+        # axs[2].set_xlabel('Tp')
+        # axs[2].set_xlabel('ss')
 
-        fig.savefig(os.path.join(main_path,'Figures','copula_scatter'+str(aa)+'.png'),dpi=500)
-        plt.close()
+        # fig.savefig(os.path.join(main_path,'Figures','copula_scatter'+str(aa)+'.png'),dpi=500)
+        # plt.close()
 
         Copula_params = xr.Dataset(
             {'Hs_cop':(('num'),copula[:,0]),
@@ -222,6 +222,6 @@ def Copula_Hs_Tp_Dir_ss(main_path,ds,num_clusters,kernels,names,num_sim_rnd):
             },coords = {'num':(('num'), np.arange(num_sim_rnd))})
         
         #Save
-        Copula_params.to_netcdf(path=os.path.join(main_path,'Results','Copula_Parameters_'+ str(aa) +'.nc'),mode='w')
+        Copula_params.to_netcdf(path=os.path.join(main_path,'Copula_Parameters_'+ str(aa) +'.nc'),mode='w')
 
 
