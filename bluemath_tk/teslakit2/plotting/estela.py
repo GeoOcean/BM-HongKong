@@ -954,17 +954,17 @@ def Plot_DWTs_Spatial_Maps(xds_KMA, xds_var,  waves, waves_period, rain, twl, ki
 
 
 
-def generate_predictand_plot(var, waves, waves_period, rain, twl):
+def generate_predictand_plot(var, waves, waves_period, rain, twl, num_clusters):
 
     if var == 'waterlevel':
 
-        num_clusters = len(np.unique(twl.cluster))  # Número de clústeres
+        n_grid = int(np.sqrt(num_clusters))
 
         # Crear el colormap para los clústeres
         c_clusters = plt.cm.viridis(np.linspace(0, 1, num_clusters))
 
         fig = plt.figure(figsize=(15, 12))
-        gs = gridspec.GridSpec(6, 6)  # Crear una grilla de subgráficos
+        gs = gridspec.GridSpec(n_grid, n_grid)  # Crear una grilla de subgráficos
 
         # Para cada clúster
         for i_cluster in range(num_clusters):
@@ -1021,11 +1021,11 @@ def generate_predictand_plot(var, waves, waves_period, rain, twl):
 
     else:
 
-        num_clusters = len(np.unique(waves.cluster))
+        n_grid = int(np.sqrt(num_clusters))
         c_clusters = plt.cm.viridis(np.linspace(0, 1, num_clusters)) 
 
         fig = plt.figure(figsize=(15, 12))
-        gs = gridspec.GridSpec(6, 6)  
+        gs = gridspec.GridSpec(n_grid, n_grid)  
 
         for i_cluster in range(num_clusters):
             ax = fig.add_subplot(gs[i_cluster], projection=ccrs.PlateCarree())  
