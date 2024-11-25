@@ -657,8 +657,8 @@ def Plot_DWTs_Mean_Anom(xds_KMA, xds_var, kind='mean', mask_land=None,
         if kind=='mean':
 
             if var=='geo500hpa':
-                var_max = np.nanmax(xds_var)#57322+500
-                var_min = np.nanmin(xds_var)#57322-500
+                var_max = 57322+cbar_mean
+                var_min = 57322-cbar_mean
                 it = np.where(bmus==ic)[0][:]
                 c_mean = xds_var.isel(time=it).mean(dim='time')
                 c_plot = c_mean # np.multiply(c_mean, scale)  # apply scale
