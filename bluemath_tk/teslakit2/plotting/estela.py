@@ -657,8 +657,8 @@ def Plot_DWTs_Mean_Anom(xds_KMA, xds_var, kind='mean', mask_land=None,
         if kind=='mean':
 
             if var=='geo500hpa':
-                var_max = 57322+350
-                var_min = 57322-350
+                var_max = np.nanmax(xds_var)#57322+500
+                var_min = np.nanmin(xds_var)#57322-500
                 it = np.where(bmus==ic)[0][:]
                 c_mean = xds_var.isel(time=it).mean(dim='time')
                 c_plot = c_mean # np.multiply(c_mean, scale)  # apply scale
@@ -720,12 +720,20 @@ def Plot_DWTs_Mean_Anom(xds_KMA, xds_var, kind='mean', mask_land=None,
     cb = fig.colorbar(pc, cax=cbar_ax, orientation='horizontal', extend='both')
     
     if kind=='mean':
-        cb.set_label('Pressure (mbar)')
-        plt.savefig(f'results/DWT_{var}.png', dpi=300, bbox_inches='tight')
+        if var == 'geo500hpa':
+            cb.set_label('Pressure (m2 s-2)')
+            plt.savefig(f'results/DWT_{var}.png', dpi=300, bbox_inches='tight')
+        else:
+            cb.set_label('Pressure (mbar)')
+            plt.savefig(f'results/DWT_{var}.png', dpi=300, bbox_inches='tight')
 
     elif kind=='anom':
-        cb.set_label('Pressure anomalies (mbar)')
-        plt.savefig(f'results/DWT_anom_{var}.png', dpi=300, bbox_inches='tight')
+        if var == 'geo500hpa':
+            cb.set_label('Pressure anomalies (m2 s-2)')
+            plt.savefig(f'results/DWT_{var}.png', dpi=300, bbox_inches='tight')
+        else:
+            cb.set_label('Pressure anomalies (mbar)')
+            plt.savefig(f'results/DWT_{var}.png', dpi=300, bbox_inches='tight')
 
     # show and return figure
     if show: plt.show()
