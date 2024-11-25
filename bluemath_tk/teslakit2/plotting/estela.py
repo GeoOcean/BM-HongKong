@@ -163,9 +163,9 @@ def axplot_DWT(ax,xds_var, dwt, vmin, vmax, wt_num, land=None, wt_color=None):
     var = xds_var.name
 
     if var=='geo500hpa':
-        cmap = copy.deepcopy(cm.get_cmap('GnBu'))
+        cmap = cm.get_cmap('GnBu') # copy.deepcopy(cm.get_cmap('GnBu'))
     else:
-        cmap = copy.deepcopy(cm.get_cmap('RdBu_r'))
+        cmap = cm.get_cmap('RdBu_r') # copy.deepcopy(cm.get_cmap('RdBu_r')) 
 
     # EOF pcolormesh 
     # pc = ax.pcolormesh(
@@ -174,9 +174,11 @@ def axplot_DWT(ax,xds_var, dwt, vmin, vmax, wt_num, land=None, wt_color=None):
     #     clim = (vmin, vmax), transform = ccrs.PlateCarree()
     # )
 
+    levels = np.linspace(vmin, vmax, 101)  # 101 niveles (100 intervalos)
+
 
     pc = ax.contourf(
-        xds_var.longitude.values, xds_var.latitude.values, dwt, 100,
+        xds_var.longitude.values, xds_var.latitude.values, dwt, levels,
         cmap = cmap, shading = 'gouraud',
         vmin = vmin, vmax=vmax, transform = ccrs.PlateCarree()
     )
@@ -715,7 +717,8 @@ def Plot_DWTs_Mean_Anom(xds_KMA, xds_var, kind='mean', mask_land=None,
 
     # add a colorbar        
     cbar_ax = fig.add_axes([pax_l.x0, pax_l.y0-0.05, pax_r.x1 - pax_l.x0, 0.02])
-    cb = fig.colorbar(pc, cax=cbar_ax, orientation='horizontal')
+    cb = fig.colorbar(pc, cax=cbar_ax, orientation='horizontal', extend='both')
+    
     if kind=='mean':
         cb.set_label('Pressure (mbar)')
         plt.savefig(f'results/DWT_{var}.png', dpi=300, bbox_inches='tight')
