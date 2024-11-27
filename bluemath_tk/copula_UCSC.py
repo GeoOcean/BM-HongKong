@@ -74,6 +74,111 @@ def Empirical_ICDF(x, p):
 
 
 
+from scipy.stats import genextreme
+import numpy as np
+
+def preprocess_data(x):
+    '''
+    Preprocesa los datos antes de ajustar la distribución GEV.
+    
+    Parameters:
+    - x: Datos de entrada.
+
+    Returns:
+    - x: Datos preprocesados.
+    '''
+    x = np.array(x)
+    # Eliminar NaN e infinitos
+    x = x[np.isfinite(x)]
+    
+    # Eliminar valores extremos fuera del percentil 1 y 99
+    q1, q99 = np.percentile(x, [1, 99])
+    x = x[(x >= q1) & (x <= q99)]
+    
+    # Verificar rango de datos
+    if np.ptp(x) < 1e-6:
+        raise ValueError("Los datos tienen rango insuficiente para ajustar GEV.")
+    
+    return x
+
+
+def fit_gev(x):
+    '''
+    Ajusta una distribución GEV de forma robusta a los datos.
+    
+    Parameters:
+    - x: Datos utilizados para ajustar la distribución.
+
+    Returns:
+    - params: Parámetros ajustados (shape, loc, scale) o None si falla el ajuste.
+    '''
+    try:
+        # Preprocesar los datos
+        x = preprocess_data(x)
+
+        # Ajustar con scipy.stats.genextreme.fit()
+        params = genextreme.fit(x)
+        return params
+    except Exception as e:
+        print(f"Advertencia: Falló el ajuste GEV con scipy ({e}).")
+        return None
+
+
+def GEV_CDF(x):
+    '''
+    Calcula el valor de la función de distribución acumulativa (CDF) de una distribución GEV ajustada
+    a los datos `x`, evaluado en el valor máximo de los datos.
+
+    Parameters:
+    - x: Datos utilizados para ajustar la distribución GEV.
+
+    Returns:
+    - cdf: Valor de la CDF en el punto máximo de los datos.
+    '''
+    params = fit_gev(x)
+    if params is None:
+        return None
+
+    value = np.max(x)
+    shape, loc, scale = params
+    try:
+        cdf = genextreme.cdf(value, shape, loc=loc, scale=scale)
+        return cdf
+    except Exception as e:
+        print(f"Advertencia: Falló el cálculo de la CDF ({e}).")
+        return None
+
+
+def GEV_ICDF(x, p):
+    '''
+    Calcula el valor de la función inversa de distribución acumulativa (ICDF) de una distribución GEV ajustada
+    a los datos `x`, evaluado en una probabilidad `p`.
+
+    Parameters:
+    - x: Datos utilizados para ajustar la distribución GEV.
+    - p: Probabilidad en el rango [0, 1].
+
+    Returns:
+    - icdf: Valor correspondiente a la probabilidad `p`.
+    '''
+    params = fit_gev(x)
+    if params is None:
+        return None
+
+    p = np.clip(p, 0, 1)
+    shape, loc, scale = params
+    try:
+        icdf = genextreme.ppf(p, shape, loc=loc, scale=scale)
+        return icdf
+    except Exception as e:
+        print(f"Advertencia: Falló el cálculo de la ICDF ({e}).")
+        return None
+
+
+
+
+
+
 
 def copulafit(u):
     '''
@@ -116,7 +221,8 @@ def CopulaSimulation(U_data, kernels, num_sim):
 
     # kernel CDF dictionary (input defined for each variable)
     d_kf = {
-        'ECDF' : (Empirical_CDF, Empirical_ICDF)
+        'ECDF' : (Empirical_CDF, Empirical_ICDF),
+        'GEV': (GEV_CDF, GEV_ICDF),
     }
 
     # check kernel input
@@ -153,7 +259,7 @@ def CopulaSimulation(U_data, kernels, num_sim):
 
 
 
-def Copula_Hs_Tp_Dir_ss(main_path,ds,num_clusters,kernels,names,num_sim_rnd): 
+def Copula_Hs_Tp_Dir_ss(main_path,ds,num_clusters,kernels,names,num_sim_rnd, lim): 
     
     
     for aa in range(num_clusters):    
@@ -171,7 +277,7 @@ def Copula_Hs_Tp_Dir_ss(main_path,ds,num_clusters,kernels,names,num_sim_rnd):
 
         # Limitador fisico
         copula = CopulaSimulation(variables, kernels, 3*num_sim_rnd)
-        var_max = 3.5*np.nanmax(variables, axis=0)
+        var_max = lim*np.nanmax(variables, axis=0)
         pos_copula = np.where((copula[:,0]<var_max[0]) & (copula[:,0]>=0) & (copula[:,1]<var_max[1]) & (copula[:,2]<var_max[2]) & (copula[:,3]<var_max[3]))[0]
 
 
@@ -223,5 +329,3 @@ def Copula_Hs_Tp_Dir_ss(main_path,ds,num_clusters,kernels,names,num_sim_rnd):
         
         #Save
         Copula_params.to_netcdf(path=os.path.join(main_path,'Copula_Parameters_'+ str(aa) +'.nc'),mode='w')
-
-
